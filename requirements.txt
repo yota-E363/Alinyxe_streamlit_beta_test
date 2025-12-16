@@ -1,21 +1,8 @@
 streamlit
-
-# Core
 python-dotenv
-pandas
-numpy
-
-# OpenAI / Gemini
 openai
-tiktoken
-langchain
-langchain-community
-langchain-openai
-langchain-google-genai
-
-# Vector DB
-faiss-cpu
-
-# Documents
-python-docx
+google-generativeai
 PyMuPDF
+python-docx
+pandas
+matplotlib
