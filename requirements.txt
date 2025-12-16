@@ -1,8 +1,21 @@
-openai
-PyMuPDF
-python-dotenv
-IPython
-jupyter
-jupyterlab
-ipykernel
 streamlit
+
+# Core
+python-dotenv
+pandas
+numpy
+
+# OpenAI / Gemini
+openai
+tiktoken
+langchain
+langchain-community
+langchain-openai
+langchain-google-genai
+
+# Vector DB
+faiss-cpu
+
+# Documents
+python-docx
+PyMuPDF
