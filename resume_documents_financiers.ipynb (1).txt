@@ -1,0 +1,465 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "e04a80cf",
+   "metadata": {},
+   "source": [
+    "# Résumé automatique de documents financiers\n",
+    "\n",
+    "Objectif : transformer rapidement un **rapport financier** (annuel, trimestriel, comptes, bilan, annexes) en un **résumé clair et chiffré**."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "a6ee0c66",
+   "metadata": {},
+   "source": [
+    "# Résumé automatique de documents financiers (PDF)\n",
+    "\n",
+    "\n",
+    "### PARTIE 1 — Préparation (imports, .env)\n",
+    "- Charger les librairies nécessaires  \n",
+    "- Lire les variables depuis `.env` (clé API, chemin du PDF, modèle OpenAI)  \n",
+    "- Vérifier la configuration minimale  \n",
+    "\n",
+    "### PARTIE 2 — Lecture du PDF (avec repères par page)\n",
+    "- Ouvrir le fichier PDF avec **PyMuPDF**  \n",
+    "- Extraire le texte page par page  \n",
+    "- Ajouter un séparateur clair `=== [PAGE X] ===`  \n",
+    "- Nettoyer le texte et le tronquer si trop long  \n",
+    "\n",
+    "### PARTIE 3 — Consignes orientées FINANCE\n",
+    "- Définir le rôle : *analyste financier*  \n",
+    "- Exiger un **résumé structuré** (Société, Résumé exécutif, Chiffres clés, Analyse, Références internes)  \n",
+    "- Imposer la règle : **ne pas inventer de chiffres** (mettre `non précisé` si absent)  \n",
+    "- Demander un tableau de 6 à 12 indicateurs maximum  \n",
+    "\n",
+    "### PARTIE 4 — Appel à l’API OpenAI (Responses)\n",
+    "- Envoyer deux messages (system + user) à l’API  \n",
+    "- Utiliser `client.responses.create(...)`  \n",
+    "- Récupérer le texte résumé depuis `response.output_text`  \n",
+    "\n",
+    "### PARTIE 5 — Affichage du résumé \n",
+    "- Afficher le résumé brut dans la console  \n",
+    "- Afficher le résumé en Markdown (plus lisible dans Jupyter)  \n",
+    "- Ajouter un rappel : **toujours vérifier les chiffres et pages d’origine**  \n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "fa87b643",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Prérequis (exécuter une seule fois dans le notebook) \n",
+    "!pip install openai PyMuPDF python-dotenv"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "bfa3ba98",
+   "metadata": {},
+   "source": [
+    "# PARTIE 1 — PRÉPARATION (imports, .env)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "1e36cd23",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os\n",
+    "import fitz # PyMuPDF\n",
+    "from dotenv import load_dotenv\n",
+    "from openai import OpenAI\n",
+    "from IPython.display import Markdown, display"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "f4c53b18",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os, pathlib\n",
+    "print(\"Dossier courant :\", pathlib.Path.cwd())\n",
+    "\n",
+    "# Chercher et charger le .env (remonte les dossiers si besoin)\n",
+    "from dotenv import load_dotenv, find_dotenv\n",
+    "\n",
+    "env_path = find_dotenv(filename=\".env\", usecwd=True)\n",
+    "env_path"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "ceef1608",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\n",
+    "load_dotenv(dotenv_path=env_path, override=True)              # Charge explicitement le fichier .env et écrase les variables existantes si nécessaire\n",
+    "  \n",
+    "api_key = os.getenv(\"OPENAI_API_KEY\")    \n",
+    "print(api_key[:4] + \"...\" + \"****\")  \n",
+    "  \n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "252597c3",
+   "metadata": {},
+   "source": [
+    "# Partie 2: Lecture du PDF (avec repères par page)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "5f285d84",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\n",
+    "chemin_pdf = \"./data/teslafinancialreport.pdf\""
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "1c681b64",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\n",
+    "pdf = fitz.open(chemin_pdf)\n",
+    "\n",
+    "texte = \"\"\n",
+    "for i, page in enumerate(pdf, start=1):\n",
+    "    texte_page = page.get_text()\n",
+    "    texte += f\"\\n\\n=== [PAGE {i}] ===\\n\" + texte_page.strip()\n",
+    "\n",
+    "print(texte)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "b3e81b3b",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Nettoyage léger : retirer espaces inutiles\n",
+    "texte = \"\\n\".join(l.strip() for l in texte.splitlines())\n",
+    "texte"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "c92ce63d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Option de sécurité : éviter d'envoyer un texte excessivement long\n",
+    "LONGUEUR_MAX = 120_000 # augmentez si nécessaire\n",
+    "if len(texte) > LONGUEUR_MAX:\n",
+    "    texte = texte[:LONGUEUR_MAX]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "612c0be4",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Aperçu rapide (facultatif) :\n",
+    "print(\"Aperçu du début du texte :\\n\")\n",
+    "print(texte[:800])"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "374cc636",
+   "metadata": {},
+   "source": [
+    "# PARTIE 3 — Consignes (format de sortie)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "a3d3b73e",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "consignes = (\n",
+    "\"Tu es analyste financier. On te fournit le texte d'un document financier\\n\"\n",
+    "\"(rapport annuel, trimestriel, comptes, bilan, annexes).\\n\\n\"\n",
+    "\"Produis une synthèse **précise et chiffrée** en Markdown selon ce cadre :\\n\\n\"\n",
+    "\"- **Société / Période / Devise** : (si repérable)\\n\"\n",
+    "\"- **Résumé exécutif (5–8 lignes)** : activité, faits marquants, contexte\\n\"\n",
+    "\"- **Chiffres clés** (tableau) :\\n\"\n",
+    "\" | Indicateur | Valeur | Évolution/Contexte | Période | Page |\\n\"\n",
+    "\" |---|---:|---|---|---:|\\n\"\n",
+    "\" (exemples : Chiffre d'affaires, EBIT/EBITDA, Résultat net, Marge, FCF, CAPEX,\\n\"\n",
+    "\" Dette nette, Trésorerie, NPL/Coût du risque pour banque, CET1, LCR/NSFR, etc.)\\n\"\n",
+    "\"- **Analyse** :\\n\"\n",
+    "\" - Performance (croissance, marges, cash)\\n\"\n",
+    "\" - Structure financière (dette, liquidité)\\n\"\n",
+    "\" - Risques & incertitudes (marché, réglementation, change)\\n\"\n",
+    "\" - Outlook / Guidance (si communiqué)\\n\"\n",
+    "\"- **Références internes** : pages/sections à relire\\n\\n\"\n",
+    "\"Exigences :\\n\"\n",
+    "\"- **N'invente aucun chiffre**. Si une valeur n'apparaît pas clairement : `non précisé`.\\n\"\n",
+    "\"- Cite la **Page** d'origine quand c'est possible (repère `=== [PAGE X] ===`).\\n\"\n",
+    "\"- 6 à 12 **indicateurs quantitatifs** maximum (les plus utiles).\\n\"\n",
+    "\"- Reste concis : 200–350 mots hors tableau.\"\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "5cf51def",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0d4112ae",
+   "metadata": {},
+   "source": [
+    "PARTIE 4 — Appel API OpenAI (Responses)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "f97aec11",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "client = OpenAI(api_key=api_key)\n",
+    "\n",
+    "modele = \"gpt-4o-mini\"\n",
+    "\n",
+    "reponse = client.responses.create(\n",
+    "    model=modele,\n",
+    "    input=[\n",
+    "        {\"role\": \"system\", \"content\": consignes},\n",
+    "        {\"role\": \"user\", \"content\": texte},\n",
+    "    ],\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "eb026c35",
+   "metadata": {},
+   "source": [
+    "# Partie 5: Affichage du résumé (markdown)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cd12425f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "resume = reponse.output_text\n",
+    "\n",
+    "\n",
+    "print(\"\\n=== RÉSUMÉ FINANCIER GÉNÉRÉ ===\\n\")\n",
+    "print(resume)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "f4d3b45c",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "display(Markdown(resume))\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "39db6bae",
+   "metadata": {},
+   "source": [
+    "# Partie 6: Questions interactives sur le PDF\n",
+    "\n",
+    "Cette partie permet de poser des **questions spécifiques** sur le contenu du PDF\n",
+    "et d'obtenir des réponses précises, sourcées si possible (référence de page).\n",
+    "\n",
+    "Exemples de questions :\n",
+    "- Quel est le chiffre d’affaires 2023 ?\n",
+    "- Quelle est la marge nette du groupe ?\n",
+    "- Quels sont les principaux risques identifiés ?\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "1464ce5e",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Question de l'utilisateur (à modifier librement)\n",
+    "ma_question = \"Quel est le résultat net ?\""
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "553818ee",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Consignes pour le modèle : répondre uniquement avec le texte fourni\n",
+    "consignes_questions = (\n",
+    "    \"Tu es analyste financier. On te donne un extrait de rapport financier. \"\n",
+    "    \"Réponds uniquement à la question posée, sans inventer de données. \"\n",
+    "    \"Si la réponse n'est pas claire dans le texte, écris : 'non précisé'. \"\n",
+    "    \"Quand c'est possible, indique aussi la page d'origine (repère '=== [PAGE X] ===').\"\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "84e2dbfc",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Appel API\n",
+    "reponse_question = client.responses.create(\n",
+    "    model=\"gpt-4o\",\n",
+    "    input=[\n",
+    "        {\"role\": \"system\", \"content\": consignes_questions},\n",
+    "        {\"role\": \"user\", \"content\": f\"Question : {ma_question}\\n\\nTexte PDF :\\n{texte}\"},\n",
+    "    ],\n",
+    ")\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "814e8787",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Afficher la réponse\n",
+    "print(\"\\n=== RÉPONSE À LA QUESTION ===\\n\")\n",
+    "print(reponse_question.output_text)\n",
+    "display(Markdown(reponse_question.output_text))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "4a0f5481",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# ================================\n",
+    "# BOUCLE INTERACTIVE SUR LE PDF\n",
+    "# ================================\n",
+    "\n",
+    "consignes_questions = (\n",
+    "    \"Tu es analyste financier. On te donne le texte d’un rapport financier. \"\n",
+    "    \"Réponds uniquement à la question posée, sans inventer de données. \"\n",
+    "    \"Si la réponse n’est pas claire dans le texte, écris : 'non précisé'. \"\n",
+    "    \"Quand c’est possible, indique aussi la page d’origine (repère '=== [PAGE X] ===').\"\n",
+    ")\n",
+    "\n",
+    "while True:\n",
+    "    # Demander une question à l'utilisateur\n",
+    "    ma_question = input(\"\\nPosez votre question (ou tapez 'bye' pour quitter) : \")\n",
+    "    \n",
+    "    # Condition de sortie\n",
+    "    if ma_question.strip().lower() == \"bye\":\n",
+    "        print(\"👋 Fin de l’interaction. Merci d’avoir utilisé l’application !\")\n",
+    "        break\n",
+    "    \n",
+    "    # Appel API pour répondre\n",
+    "    reponse_question = client.responses.create(\n",
+    "        model=modele,\n",
+    "        input=[\n",
+    "            {\"role\": \"system\", \"content\": consignes_questions},\n",
+    "            {\"role\": \"user\", \"content\": f\"Question : {ma_question}\\n\\nTexte PDF :\\n{texte}\"},\n",
+    "        ],\n",
+    "    )\n",
+    "    \n",
+    "    # Afficher la réponse\n",
+    "    print(\"\\n=== RÉPONSE ===\\n\")\n",
+    "    print(reponse_question.output_text)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "19a7ce76",
+   "metadata": {},
+   "source": [
+    "# Rappel des bonnes pratiques\n",
+    "\n",
+    "> **Note :** Vérifiez toujours les chiffres affichés et leurs pages d'origine.  \n",
+    "> En cas d'ambiguïté dans le PDF, remplacez par *« non précisé »* et prenez  \n",
+    "> quelques minutes pour confirmer dans le document source.\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "c97f5b57",
+   "metadata": {},
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "c5241951",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "545ed699",
+   "metadata": {},
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "genai",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.13"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
