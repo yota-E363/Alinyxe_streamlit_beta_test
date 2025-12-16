@@ -1,4 +1,4 @@
-PyPDF2>=3.0.0
 streamlit==1.52.1
-pandas
+pandas==2.3.3
 python-docx
+PyPDF2>=3.0.0
